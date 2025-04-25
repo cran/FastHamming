@@ -1,0 +1,8 @@
+f44a91f9e44d8e384a123c1d9628f804 *DESCRIPTION
+b28bb8d2b3eaee738a4d856be0554e82 *NAMESPACE
+a8f29e62c28e3f28a678c202b65f682f *R/FastHamming.R
+f429865ba23137b6363d690d1cef73f1 *man/hamming_distance.Rd
+f4ff04d97c97a98243c8e75044b56f5f *src/FastHamming.c
+68f8d13092527793245ec8144eeebe5f *src/Makevars
+e62f6977b5acbfc15b82980b7e2a7f62 *src/Makevars.win
+b0816189dae30a33ae412957aa0caefd *src/init.c
