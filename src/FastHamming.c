@@ -4,7 +4,15 @@
 #include <stdlib.h>
 
 #ifdef _OPENMP
-#include <omp.h>  // Required for OpenMP functions
+  /* Temporarily disable R's `match` macro so Clang's OpenMP pragmas parse correctly */
+  #pragma push_macro("match")
+  #undef match
+
+  #include <omp.h>  /* Required for OpenMP functions */
+
+  #pragma pop_macro("match")
+#else
+  /* No OpenMP: omp.h not included */
 #endif
 
 // Fast popcount for 64-bit values
@@ -53,48 +61,51 @@ SEXP c_hamming_distance(SEXP r_data,
     omp_set_dynamic(0);
     omp_set_num_threads(user_threads);
   } else {
-    omp_set_num_threads(omp_get_max_threads());
+    omp_set_dynamic(0);  // Disable dynamic adjustment
+    int max_possible_threads = omp_get_num_procs();  // Get total available cores
+    omp_set_num_threads(max_possible_threads);  // Force reset to max threads
   }
   // Report what OpenMP is actually doing
 #pragma omp parallel
-{
+  {
 #pragma omp master
-{
-  int max_threads  = omp_get_max_threads();
-  int num_procs    = omp_get_num_procs();
-  int actual       = omp_get_num_threads();
-  Rprintf("OpenMP reports: max_threads = %d, num_procs = %d, actual used = %d\n",
-          max_threads, num_procs, actual);
-}
-}
-#endif
-
-// Allocate packed data buffer
-uint64_t* packed_data = (uint64_t*)calloc((size_t)n_rows * n_words, sizeof(uint64_t));
-if (!packed_data) {
-  error("Memory allocation failed for packed data.");
-}
-
-// Pack binary matrix from INTEGER(r_data)
-int* raw = INTEGER(r_data);
-for (int i = 0; i < n_rows; ++i) {
-  for (int j = 0; j < n_cols; ++j) {
-    if (raw[i + j * n_rows]) {
-      packed_data[i * n_words + (j >> 6)] |= ((uint64_t)1 << (j & 63));
+    {
+      int max_threads  = omp_get_max_threads();
+      int num_procs    = omp_get_num_procs();
+      int actual       = omp_get_num_threads();
+      Rprintf("OpenMP reports: max_threads = %d, num_procs = %d, actual used = %d\n",
+              max_threads, num_procs, actual);
     }
   }
+#endif
+
+  // Allocate packed data buffer
+  uint64_t* packed_data = (uint64_t*)calloc((size_t)n_rows * n_words, sizeof(uint64_t));
+  if (!packed_data) {
+    error("Memory allocation failed for packed data.");
+  }
+
+  // Pack binary matrix from INTEGER(r_data)
+  int* raw = INTEGER(r_data);
+  for (int i = 0; i < n_rows; ++i) {
+    for (int j = 0; j < n_cols; ++j) {
+      if (raw[i + j * n_rows]) {
+        packed_data[i * n_words + (j >> 6)] |= ((uint64_t)1 << (j & 63));
+      }
+    }
+  }
+
+  // Allocate result matrix (INTSXP)
+  SEXP r_result = PROTECT(allocMatrix(INTSXP, n_rows, n_rows));
+  int* result = INTEGER(r_result);
+
+  // Compute distances
+  compute_hamming_distances(packed_data, n_rows, n_words, result);
+
+  // Cleanup and return
+  free(packed_data);
+  UNPROTECT(1);
+  return r_result;
 }
 
-// Allocate result matrix (INTSXP)
-SEXP r_result = PROTECT(allocMatrix(INTSXP, n_rows, n_rows));
-int* result = INTEGER(r_result);
-
-// Compute distances
-compute_hamming_distances(packed_data, n_rows, n_words, result);
-
-// Cleanup and return
-free(packed_data);
-UNPROTECT(1);
-return r_result;
-}
 
